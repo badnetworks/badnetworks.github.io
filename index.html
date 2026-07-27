@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Pathproof — prove it's the network. Or prove it isn't.</title>
+<meta name="description" content="Pathproof, by badnetworks, continuously measures the capacity and available bandwidth of your network paths from distributed vantage points — evidence-grade numbers that tell a slow link from a busy one.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d1420;
+    --panel: #131d2e;
+    --panel-2: #182438;
+    --line: #22314a;
+    --ink: #e6ecf4;
+    --muted: #8ea2ba;
+    --capacity: #1e8fd5;   /* series: capacity — validated vs dark surface */
+    --adr: #c67a22;        /* series: ADR */
+    --incident: #d6564a;   /* status: serious — reserved, labeled, never a series */
+    --sans: "Archivo", system-ui, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: var(--sans); line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--adr); outline-offset: 3px; }
+  .wrap { max-width: 68rem; margin: 0 auto; padding: 0 1.5rem; }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip: rect(0 0 0 0); white-space: nowrap;
+  }
+
+  /* ---- header ---- */
+  header { display: flex; align-items: center; justify-content: space-between; padding: 1.4rem 0; }
+  .brand {
+    font-weight: 800; font-size: 1.15rem; letter-spacing: -0.02em;
+    text-decoration: none; font-stretch: 110%;
+    display: inline-flex; align-items: baseline; gap: .6rem;
+  }
+  .brand .proof { color: var(--adr); }
+  .brand small {
+    font-family: var(--mono); font-weight: 400; font-size: .68rem;
+    color: var(--muted); letter-spacing: 0;
+  }
+  nav { display: flex; align-items: center; gap: 1.5rem; }
+  nav a { font-family: var(--mono); font-size: .8rem; color: var(--muted); text-decoration: none; }
+  nav a:hover { color: var(--ink); }
+  .btn {
+    display: inline-block; text-decoration: none; font-weight: 600;
+    background: var(--ink); color: var(--bg);
+    padding: .6rem 1.1rem; border-radius: 6px; font-size: .9rem;
+  }
+  .btn:hover { background: #fff; }
+  .btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+  .btn.ghost:hover { border-color: var(--muted); }
+
+  /* ---- hero ---- */
+  .hero { padding: 4.5rem 0 2.5rem; }
+  .eyebrow {
+    font-family: var(--mono); font-size: .72rem; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  h1 {
+    font-size: clamp(2rem, 5vw, 3.15rem); font-weight: 800;
+    letter-spacing: -0.025em; line-height: 1.08;
+    font-stretch: 105%; margin: .9rem 0 1.2rem; max-width: 24ch;
+  }
+  .lede { color: var(--muted); font-size: 1.08rem; max-width: 58ch; }
+  .hero-ctas { margin-top: 1.8rem; display: flex; gap: .8rem; flex-wrap: wrap; }
+
+  /* ---- chart panel (the signature) ---- */
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 1.4rem 1.5rem 1.1rem; margin: 3rem 0 0;
+  }
+  .panel-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: .5rem; }
+  .panel-title { font-weight: 600; font-size: .95rem; }
+  .panel-sub { font-family: var(--mono); font-size: .72rem; color: var(--muted); }
+  .legend { display: flex; gap: 1.2rem; margin-top: .7rem; }
+  .legend span { font-family: var(--mono); font-size: .74rem; color: var(--muted); display: inline-flex; align-items: center; gap: .45rem; }
+  .legend i { width: 14px; height: 2px; display: inline-block; }
+  .chart-box { position: relative; margin-top: .6rem; }
+  .chart-box svg { display: block; width: 100%; height: auto; }
+  #tip {
+    position: absolute; pointer-events: none; display: none;
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px;
+    font-family: var(--mono); font-size: .72rem; padding: .45rem .6rem; line-height: 1.5;
+    white-space: nowrap; z-index: 2;
+  }
+  #tip b { font-weight: 500; }
+  .chart-note {
+    margin-top: .9rem; font-size: .88rem; color: var(--muted); max-width: 64ch;
+  }
+  .chart-note strong { color: var(--ink); }
+
+  /* ---- sections ---- */
+  section { padding: 3.5rem 0; }
+  section + section { border-top: 1px solid var(--line); }
+  h2 { font-size: 1.45rem; font-weight: 700; letter-spacing: -0.015em; max-width: 34ch; margin-bottom: .8rem; }
+  .prose p { color: var(--muted); max-width: 62ch; }
+  .prose p + p { margin-top: 1rem; }
+  .prose strong { color: var(--ink); }
+
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 1.8rem; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 1.4rem 1.3rem;
+  }
+  .card .k {
+    font-family: var(--mono); font-size: .72rem; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .card h3 { font-size: 1.02rem; margin: .5rem 0 .45rem; font-weight: 700; }
+  .card p { font-size: .9rem; color: var(--muted); }
+  .card .reads {
+    margin-top: .9rem; padding-top: .8rem; border-top: 1px dashed var(--line);
+    font-family: var(--mono); font-size: .74rem; color: var(--muted);
+  }
+  @media (max-width: 760px) { .cards { grid-template-columns: 1fr; } }
+
+  .steps { counter-reset: step; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 1.8rem; }
+  .step { counter-increment: step; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 1.4rem 1.3rem; }
+  .step::before {
+    content: "0" counter(step);
+    font-family: var(--mono); font-size: .75rem; color: var(--adr);
+  }
+  .step h3 { font-size: 1rem; margin: .5rem 0 .4rem; }
+  .step p { font-size: .9rem; color: var(--muted); }
+  @media (max-width: 760px) { .steps { grid-template-columns: 1fr; } }
+
+  .open-strip {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 1.3rem 1.5rem; display: flex; justify-content: space-between;
+    align-items: center; gap: 1rem; flex-wrap: wrap;
+  }
+  .open-strip p { color: var(--muted); font-size: .92rem; max-width: 46rem; }
+  .open-strip a.inline { color: var(--ink); }
+
+  footer {
+    border-top: 1px solid var(--line); padding: 2rem 0 3rem;
+    font-family: var(--mono); font-size: .74rem; color: var(--muted);
+  }
+  footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+  footer a { color: var(--muted); }
+</style>
+</head>
+<body data-palette="#1e8fd5,#c67a22">
+
+<div class="wrap">
+  <header>
+    <a class="brand" href="/"><span>path<span class="proof">proof</span></span> <small>by badnetworks</small></a>
+    <nav aria-label="Sections">
+      <a href="#diagnose">diagnose</a>
+      <a href="#how">how it works</a>
+      <a href="#pricing">pricing</a>
+      <a href="#science">open science</a>
+      <a class="btn" href="https://github.com/Pathrate">Request early access</a>
+    </nav>
+  </header>
+
+  <div class="hero">
+    <p class="eyebrow">Continuous path-quality monitoring</p>
+    <h1>Prove it's the network. Or prove it isn't.</h1>
+    <p class="lede">
+      Pathproof watches the actual capacity and available bandwidth of every network
+      path you care about — continuously, from distributed vantage points, at kilobits
+      per second of probe traffic. When users say “the network is bad,” you'll know
+      how, where, and since when — with numbers that carry their own evidence.
+    </p>
+    <div class="hero-ctas">
+      <a class="btn" href="https://github.com/Pathrate">Request early access</a>
+      <a class="btn ghost" href="#diagnose">See what it shows you</a>
+    </div>
+
+    <figure class="panel" aria-labelledby="chart-title">
+      <div class="panel-head">
+        <span class="panel-title" id="chart-title">HQ → payments-api.example — 30 days</span>
+        <span class="panel-sub">probe load 41 Kb/s avg · mode 1 (agent ↔ agent)</span>
+      </div>
+      <div class="legend" aria-hidden="true">
+        <span><i style="background:var(--capacity)"></i>capacity</span>
+        <span><i style="background:var(--adr)"></i>available bandwidth (ADR bracket)</span>
+        <span><i style="background:var(--incident);height:8px;opacity:.35"></i>incident</span>
+      </div>
+      <div class="chart-box">
+        <svg id="chart" viewBox="0 0 720 250" role="img" aria-label="Line chart of 30 days of measurements: capacity holds near 940 megabits per second the entire time, while available bandwidth sags to about 210 megabits per second during a three-day incident window — congestion, not a broken link."></svg>
+        <div id="tip"></div>
+      </div>
+      <figcaption class="chart-note">
+        Days 12–15: available bandwidth collapsed to ~210 Mb/s. <strong>Capacity never
+        moved.</strong> That's congestion on the path — not a failing link, not a
+        provider downgrade — and it's the difference between opening a peering
+        conversation and replacing hardware that was never broken.
+      </figcaption>
+      <details class="sr-only">
+        <summary>Chart data as text</summary>
+        <p>Capacity holds between 918 and 947 Mb/s for all 30 days. Available bandwidth
+        varies 610–780 Mb/s on normal days, drops to 205–260 Mb/s on days 12 through 15
+        (marked as the incident window), then recovers.</p>
+      </details>
+    </figure>
+  </div>
+</div>
+
+<section id="diagnose">
+  <div class="wrap">
+    <h2>Three ways a path goes bad. One chart tells them apart.</h2>
+    <p class="prose" style="color:var(--muted);max-width:62ch">
+      A speed test gives you one number that blends them all together. Packet-dispersion
+      measurement separates what the path <em>could</em> carry from what it can carry
+      <em>right now</em> — so the diagnosis is in the data.
+    </p>
+    <div class="cards">
+      <div class="card">
+        <span class="k">capacity low</span>
+        <h3>The slow link</h3>
+        <p>The path's narrow link is smaller than what you're paying for, or a device
+           renegotiated to a lower rate. Capacity is flat — and flat at the wrong number.</p>
+        <p class="reads">reads: capacity &lt; contracted rate, steady</p>
+      </div>
+      <div class="card">
+        <span class="k">adr sagging</span>
+        <h3>The busy link</h3>
+        <p>Capacity is fine; available bandwidth sags on a schedule or after a routing
+           change. Someone else's traffic is on your narrow link. Evidence for a peering
+           or QoS conversation.</p>
+        <p class="reads">reads: capacity steady, ADR dips</p>
+      </div>
+      <div class="card">
+        <span class="k">loss / jitter</span>
+        <h3>The broken path</h3>
+        <p>Loss bursts, reordering, jitter spikes, hop-count changes. The dispersion
+           probes carry a full path-health suite alongside the bandwidth brackets.</p>
+        <p class="reads">reads: loss &gt; 0, IPDV up, route shift</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <h2>How it works</h2>
+    <div class="steps">
+      <div class="step">
+        <h3>Place vantage points</h3>
+        <p>Drop a lightweight agent at each site — offices, DCs, cloud VPCs. Paths
+           between any two agents get the full double-endpoint methodology; anything
+           else can still be covered by service probes or plain ICMP.</p>
+      </div>
+      <div class="step">
+        <h3>Probe with dispersion, not floods</h3>
+        <p>Packet pairs and short trains read the time-structure of the path: capacity,
+           an available-bandwidth bracket, loss, jitter, reordering. Kilobits per second,
+           continuously — not a saturating test you can only run at night.</p>
+      </div>
+      <div class="step">
+        <h3>Alert on the difference</h3>
+        <p>Baselines per path, alerts when capacity steps down or ADR sags below policy,
+           and reports you can attach to an SLA claim — every number carries its method,
+           confidence, and clock provenance.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="pricing">
+  <div class="wrap">
+    <h2>Pricing as legible as the measurements</h2>
+    <p class="prose" style="color:var(--muted);max-width:62ch">
+      Tokens, not tiers. <strong style="color:var(--ink)">One token is one day of
+      monitoring and storage for one path.</strong> Monitor three circuits for a
+      month, spend ninety tokens — the bill reads like the measurement log.
+    </p>
+    <div class="cards" style="grid-template-columns:repeat(2,1fr)">
+      <div class="card">
+        <span class="k">standard</span>
+        <h3>Tokens</h3>
+        <p>Continuous monitoring and storage, one token per path-day. Every plan
+           includes a <strong style="color:var(--ink)">90-day archive</strong> of
+           full measurement history — raw samples, methods, confidence, provenance.</p>
+        <p class="reads">1 token = 1 path × 1 day · 90-day archive included</p>
+      </div>
+      <div class="card">
+        <span class="k">premium</span>
+        <h3>Premium license</h3>
+        <p>Everything in standard, with a <strong style="color:var(--ink)">1-year
+           archive</strong> and <strong style="color:var(--ink)">circuit
+           analysis</strong>: an expert-reviewed report on your circuit's capacity,
+           congestion pattern, and the evidence behind both.</p>
+        <p class="reads">1-year archive · circuit analysis · same tokens</p>
+      </div>
+    </div>
+    <div class="open-strip" style="margin-top:1rem">
+      <p>
+        <strong style="color:var(--ink)">Bring your own S3.</strong> Point Pathproof
+        at your bucket and your measurement history lives in storage you own — for
+        long-term analysis, for as long as you decide. It's your evidence; you hold it.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section id="science">
+  <div class="wrap">
+    <div class="open-strip">
+      <p>
+        Pathproof is the commercial service from badnetworks, built on
+        <a class="inline" href="https://pathrate.org">Pathrate</a>, our open-source
+        implementation of peer-reviewed packet-dispersion capacity estimation
+        (Dovrolis, Ramanathan &amp; Moore, IEEE/ACM ToN 2004). The measurement core is
+        BSD-licensed and free, forever — the service adds the fleet, the history, the
+        alerting, and the support.
+      </p>
+      <a class="btn ghost" href="https://github.com/Pathrate">github.com/Pathrate</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 badnetworks · Pathproof early access opening soon</span>
+    <span>badnetworks.net · built on <a href="https://pathrate.org">pathrate.org</a> · BSD-licensed core</span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+  // 30 days, one path. Capacity flat with small measurement wobble (the omega
+  // range); ADR with diurnal texture and a 4-day congestion incident.
+  const capacity = [941,938,943,940,937,944,940,939,942,938,941,943,940,942,939,
+                    941,938,940,944,941,939,942,940,938,943,941,940,939,942,941];
+  const adr      = [742,715,760,698,731,780,755,700,726,770,741,255,208,224,262,
+                    690,742,718,761,735,700,745,772,731,708,752,740,762,729,748];
+  const INCIDENT = [11, 14];           // day indexes, inclusive
+  const W = 720, H = 250, M = {t: 16, r: 14, b: 26, l: 46};
+  const iw = W - M.l - M.r, ih = H - M.t - M.b;
+  const ymax = 1000;
+  const x = i => M.l + (i / (capacity.length - 1)) * iw;
+  const y = v => M.t + (1 - v / ymax) * ih;
+  const svg = document.getElementById("chart");
+  const ns = "http://www.w3.org/2000/svg";
+  const el = (tag, attrs, parent) => {
+    const node = document.createElementNS(ns, tag);
+    for (const key in attrs) node.setAttribute(key, attrs[key]);
+    (parent || svg).appendChild(node);
+    return node;
+  };
+  const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+  // incident band (status, labeled -- drawn first so the marks sit on top)
+  el("rect", {x: x(INCIDENT[0]), y: M.t, width: x(INCIDENT[1]) - x(INCIDENT[0]),
+              height: ih, fill: css("--incident"), opacity: 0.13});
+  // label sits in the clear space between the capacity line and the sagged ADR
+  const label = el("text", {x: (x(INCIDENT[0]) + x(INCIDENT[1])) / 2, y: M.t + 48,
+              "text-anchor": "middle", fill: css("--incident"),
+              "font-family": css("--mono"), "font-size": "10.5"});
+  label.textContent = "incident #217";
+
+  // recessive grid + y labels
+  for (const v of [0, 250, 500, 750, 1000]) {
+    el("line", {x1: M.l, x2: W - M.r, y1: y(v), y2: y(v),
+                stroke: css("--line"), "stroke-width": v === 0 ? 1 : 0.5});
+    const t = el("text", {x: M.l - 8, y: y(v) + 3.5, "text-anchor": "end",
+                fill: css("--muted"), "font-family": css("--mono"), "font-size": "10"});
+    t.textContent = v === 0 ? "0" : v === 1000 ? "1 Gb/s" : v;
+  }
+  for (const d of [0, 7, 14, 21, 29]) {
+    const anchor = d === 0 ? "start" : d === 29 ? "end" : "middle";
+    const t = el("text", {x: x(d), y: H - 8, "text-anchor": anchor,
+                fill: css("--muted"), "font-family": css("--mono"), "font-size": "10"});
+    t.textContent = "day " + (d + 1);
+  }
+
+  // series (2px lines) + direct labels at the line ends
+  const line = (data, color) => el("polyline", {
+    points: data.map((v, i) => x(i) + "," + y(v)).join(" "),
+    fill: "none", stroke: color, "stroke-width": 2,
+    "stroke-linejoin": "round", "stroke-linecap": "round",
+  });
+  line(capacity, css("--capacity"));
+  line(adr, css("--adr"));
+  const direct = (data, color, text, dy) => {
+    const t = el("text", {x: W - M.r, y: y(data[data.length - 1]) + dy,
+                "text-anchor": "end", fill: color,
+                "font-family": css("--mono"), "font-size": "10.5"});
+    t.textContent = text;
+  };
+  direct(capacity, css("--capacity"), "capacity 941 Mb/s", -8);
+  direct(adr, css("--adr"), "ADR 748 Mb/s", 16);
+
+  // hover: crosshair + tooltip
+  const tip = document.getElementById("tip");
+  const cross = el("line", {y1: M.t, y2: M.t + ih, stroke: css("--muted"),
+                            "stroke-width": 0.75, opacity: 0});
+  const dotC = el("circle", {r: 4, fill: css("--capacity"),
+                             stroke: css("--panel"), "stroke-width": 2, opacity: 0});
+  const dotA = el("circle", {r: 4, fill: css("--adr"),
+                             stroke: css("--panel"), "stroke-width": 2, opacity: 0});
+  svg.addEventListener("pointermove", ev => {
+    const rect = svg.getBoundingClientRect();
+    const sx = (ev.clientX - rect.left) * (W / rect.width);
+    const i = Math.max(0, Math.min(capacity.length - 1,
+              Math.round((sx - M.l) / iw * (capacity.length - 1))));
+    const cx = x(i);
+    cross.setAttribute("x1", cx); cross.setAttribute("x2", cx);
+    cross.setAttribute("opacity", 0.6);
+    dotC.setAttribute("cx", cx); dotC.setAttribute("cy", y(capacity[i]));
+    dotA.setAttribute("cx", cx); dotA.setAttribute("cy", y(adr[i]));
+    dotC.setAttribute("opacity", 1); dotA.setAttribute("opacity", 1);
+    const inIncident = i >= INCIDENT[0] && i <= INCIDENT[1];
+    tip.innerHTML = "<b>day " + (i + 1) + (inIncident ? " · incident #217" : "") +
+      "</b><br>capacity <b>" + capacity[i] + " Mb/s</b><br>ADR <b>" + adr[i] + " Mb/s</b>";
+    tip.style.display = "block";
+    const boxW = tip.offsetWidth;
+    const px = cx / W * rect.width;
+    tip.style.left = Math.min(Math.max(px - boxW / 2, 0), rect.width - boxW) + "px";
+    tip.style.top = "-4px";
+  });
+  svg.addEventListener("pointerleave", () => {
+    tip.style.display = "none";
+    for (const n of [cross, dotC, dotA]) n.setAttribute("opacity", 0);
+  });
+})();
+</script>
+
+</body>
+</html>
